@@ -1,2 +1,5 @@
 # contracts
-solidity smart contracts of Skyrim Netrwork
+
+## Code update in progress, so stay tuned.  
+
+solidity smart contracts of Skyrim Protocol
