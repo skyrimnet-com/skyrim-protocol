@@ -11,6 +11,7 @@ contract SNSSynth is ERC20Token {
     event Burn(address indexed from, uint256 amount);
 
     uint256 public mintingRate;
+    uint256 public rateDecimals;
 
     SNS private _snsToken;
 
@@ -21,7 +22,7 @@ contract SNSSynth is ERC20Token {
     string public symbol;
     uint8 public decimals;
 
-    constructor(address _issuer, address snsToken, string _name, string _symbol, uint8 _decimals) public Owned(_issuer){
+    constructor(address _issuer, address snsToken, string _name, string _symbol, uint8 _decimals, uint256 _rateDecimals) public Owned(_issuer){
         _snsToken = SNS(snsToken);
 
         name = _name;
@@ -32,6 +33,7 @@ contract SNSSynth is ERC20Token {
         balances[_issuer] = uint256(0);
 
         mintingRate = 0;
+        rateDecimals = 10 ** _rateDecimals;
     }
 
     /**
@@ -56,6 +58,8 @@ contract SNSSynth is ERC20Token {
         //check user balance
         uint256 userSNSBalance = _snsToken.balanceOf(user);
         uint256 snsCost = _amount.mul(mintingRate);
+        snsCost = snsCost.div(rateDecimals);
+
         require(snsCost <= userSNSBalance);
 
         //transfer from user balance to this contract
@@ -86,6 +90,8 @@ contract SNSSynth is ERC20Token {
         //check synthetic assets balance
         uint256 synBalance = balanceOf(user);
         uint256 synBurnAmount = _snsAmount.div(mintingRate);
+        synBurnAmount = _snsAmount.mul(rateDecimals);
+
         require(synBalance >= synBurnAmount, "insufficient synthetic assets balance");
 
         //burn and unlock the balance
