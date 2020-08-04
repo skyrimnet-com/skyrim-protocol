@@ -7,8 +7,9 @@ contract SNSSynth is ERC20Token {
     using SafeMath for uint256;
 
     //mint & burn event
-    event Mint(address indexed to, uint256 amount);
-    event Burn(address indexed from, uint256 amount);
+    event Mint(address indexed to, uint256 indexed amount, uint256 indexed locked);
+    event Burn(address indexed from, uint256 indexed amount, uint256 indexed unlocked);
+    event ChangeRate(uint256 indexed oldRate, uint256 indexed newRate);
 
     uint256 public mintingRate;
     uint256 public rateDecimals;
@@ -16,7 +17,7 @@ contract SNSSynth is ERC20Token {
     SNS private _snsToken;
 
     //locked SNS amount
-    mapping(address => uint256) public internalSNSBalance;
+    mapping(address => uint256) public lockedSNS;
 
     string public name;
     string public symbol;
@@ -40,8 +41,12 @@ contract SNSSynth is ERC20Token {
      * @dev synthetic assets minting rate setting up
      * @param newRate The minting rate.
      */
-    function setMintingRate(uint256 newRate) public {
+    function setMintingRate(uint256 newRate) onlyOwner public {
         require(newRate != 0);
+        require(mintingRate != newRate);
+
+        emit ChangeRate(mintingRate, newRate);
+
         mintingRate = newRate;
     }
 
@@ -66,10 +71,10 @@ contract SNSSynth is ERC20Token {
         _snsToken.transferFrom(user, address(this), snsCost);
 
         //record user sns cost to balance map
-        internalSNSBalance[user] = internalSNSBalance[user].add(snsCost);
+        lockedSNS[user] = lockedSNS[user].add(snsCost);
 
         //mint synthetic assets to user
-        _mintAssets(user, _amount);
+        _mintAssets(user, _amount, snsCost);
     }
 
 
@@ -84,21 +89,21 @@ contract SNSSynth is ERC20Token {
         require(mintingRate != 0);
 
         //check sns internal balance
-        uint256 snsBalance = internalSNSBalance[user];
+        uint256 snsBalance = lockedSNS[user];
         require(snsBalance >= _snsAmount, "too greed");
 
         //check synthetic assets balance
         uint256 synBalance = balanceOf(user);
         uint256 synBurnAmount = _snsAmount.div(mintingRate);
-        synBurnAmount = _snsAmount.mul(rateDecimals);
+        synBurnAmount = synBurnAmount.mul(rateDecimals);
 
         require(synBalance >= synBurnAmount, "insufficient synthetic assets balance");
 
         //burn and unlock the balance
-        _burnAssets(user, synBurnAmount);
+        _burnAssets(user, synBurnAmount, _snsAmount);
 
         _snsToken.transfer(user, _snsAmount);
-        internalSNSBalance[user] = internalSNSBalance[user].sub(_snsAmount);
+        lockedSNS[user] = lockedSNS[user].sub(_snsAmount);
     }
 
 
@@ -107,11 +112,11 @@ contract SNSSynth is ERC20Token {
      * @param _to The address which assets mint to.
      * @param _amount The synthetic token mint amount.
      */
-    function _mintAssets(address _to, uint256 _amount) private returns (bool) {
+    function _mintAssets(address _to, uint256 _amount, uint256 _locked) private returns (bool) {
         totalSupply = totalSupply.add(_amount);
         balances[_to] = balances[_to].add(_amount);
 
-        emit Mint(_to, _amount);
+        emit Mint(_to, _amount, _locked);
         emit Transfer(address(0), _to, _amount);
         return true;
     }
@@ -121,11 +126,11 @@ contract SNSSynth is ERC20Token {
      * @param _from The address which assets mint to.
      * @param _amount The synthetic token mint amount.
      */
-    function _burnAssets(address _from, uint256 _amount) private returns (bool) {
+    function _burnAssets(address _from, uint256 _amount, uint256 _unlocked) private returns (bool) {
         balances[_from] = balances[_from].sub(_amount);
         totalSupply = totalSupply.sub(_amount);
 
-        emit Burn(_from, _amount);
+        emit Burn(_from, _amount, _unlocked);
         emit Transfer(_from, address(0), _amount);
 
         return true;
